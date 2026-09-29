@@ -327,7 +327,9 @@ func listenMediaMessageEvent(ch chan userclient.MediaMessageEvent, botCtx *ext.C
 				logger.Errorf("create task failed: %s", err)
 				continue
 			}
+			injectCtx = tgutil.TaskNotification(tgutil.WithNotificationBot(injectCtx, botCtx), task.TaskID())
 			if err := core.AddTask(injectCtx, task); err != nil {
+				tgutil.ForgetNotification(injectCtx)
 				logger.Errorf("add task failed: %s", err)
 				continue
 			}
@@ -422,7 +424,9 @@ func processWatchMediaGroup(ctx *ext.Context, botCtx *ext.Context, user *databas
 				logger.Errorf("create task failed for album file: %s", err)
 				continue
 			}
+			injectCtx = tgutil.TaskNotification(tgutil.WithNotificationBot(injectCtx, botCtx), task.TaskID())
 			if err := core.AddTask(injectCtx, task); err != nil {
+				tgutil.ForgetNotification(injectCtx)
 				logger.Errorf("add task failed: %s", err)
 				continue
 			}

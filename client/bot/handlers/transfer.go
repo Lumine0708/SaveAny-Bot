@@ -12,6 +12,7 @@ import (
 	"github.com/krau/SaveAny-Bot/client/bot/handlers/utils/msgelem"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/strutil"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/core"
@@ -77,7 +78,7 @@ func handleTransferCmd(ctx *ext.Context, update *ext.Update) error {
 
 	files, err := listable.ListFiles(ctx, sourcePath)
 	if err != nil {
-		ctx.EditMessage(update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
 			ID:      replied.ID,
 			Message: i18n.T(i18nk.BotMsgTransferErrorListFilesFailed, map[string]any{"Error": err}),
 		})
@@ -88,7 +89,7 @@ func handleTransferCmd(ctx *ext.Context, update *ext.Update) error {
 	if len(args) >= 3 {
 		filter, err = regexp.Compile(args[2])
 		if err != nil {
-			ctx.EditMessage(update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
+			tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
 				ID:      replied.ID,
 				Message: i18n.T(i18nk.BotMsgTransferErrorInvalidRegex, map[string]any{"Error": err}),
 			})
@@ -108,7 +109,7 @@ func handleTransferCmd(ctx *ext.Context, update *ext.Update) error {
 	}
 
 	if len(filteredFiles) == 0 {
-		ctx.EditMessage(update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
 			ID:      replied.ID,
 			Message: i18n.T(i18nk.BotMsgTransferErrorNoFilesToTransfer, nil),
 		})
@@ -130,14 +131,14 @@ func handleTransferCmd(ctx *ext.Context, update *ext.Update) error {
 	})
 	if err != nil {
 		logger.Errorf("Failed to build storage selection keyboard: %s", err)
-		ctx.EditMessage(update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
 			ID:      replied.ID,
 			Message: i18n.T(i18nk.BotMsgTransferErrorBuildStorageSelectKeyboardFailed, map[string]any{"Error": err}),
 		})
 		return dispatcher.EndGroups
 	}
 
-	ctx.EditMessage(update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
 		ID: replied.ID,
 		Message: i18n.T(i18nk.BotMsgTransferInfoFilesSelectStorage, map[string]any{
 			"Count":  len(filteredFiles),
@@ -155,7 +156,7 @@ func handleTransferCallback(ctx *ext.Context, userID int64, targetStorage storag
 	sourceStorage, err := storage.GetStorageByUserIDAndName(ctx, userID, data.TransferSourceStorName)
 	if err != nil {
 		logger.Errorf("Failed to get source storage: %s", err)
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 			ID:      msgID,
 			Message: i18n.T(i18nk.BotMsgTransferErrorStorageNotFound, map[string]any{"StorageName": data.TransferSourceStorName, "Error": err}),
 		})
@@ -164,7 +165,7 @@ func handleTransferCallback(ctx *ext.Context, userID int64, targetStorage storag
 
 	listable, ok := sourceStorage.(storage.StorageListable)
 	if !ok {
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 			ID:      msgID,
 			Message: i18n.T(i18nk.BotMsgTransferErrorStorageNotListable, map[string]any{"StorageName": data.TransferSourceStorName}),
 		})
@@ -173,14 +174,14 @@ func handleTransferCallback(ctx *ext.Context, userID int64, targetStorage storag
 
 	// Re-fetch files to get FileInfo (since we only stored paths)
 	// This is necessary to get size and other metadata
-	ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 		ID:      msgID,
 		Message: i18n.T(i18nk.BotMsgTransferInfoFetchingFiles, nil),
 	})
 
 	allFiles, err := listable.ListFiles(ctx, data.TransferSourcePath)
 	if err != nil {
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 			ID:      msgID,
 			Message: i18n.T(i18nk.BotMsgTransferErrorListFilesFailed, map[string]any{"Error": err}),
 		})
@@ -206,7 +207,7 @@ func handleTransferCallback(ctx *ext.Context, userID int64, targetStorage storag
 	}
 
 	if len(elems) == 0 {
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 			ID:      msgID,
 			Message: i18n.T(i18nk.BotMsgTransferErrorNoFilesToTransfer, nil),
 		})
@@ -223,22 +224,23 @@ func handleTransferCallback(ctx *ext.Context, userID int64, targetStorage storag
 		true, // IgnoreErrors
 	)
 
+	injectCtx = tgutil.TaskNotification(injectCtx, task.TaskID(), msgedit.Key{ChatID: userID, MessageID: msgID})
 	if err := core.AddTask(injectCtx, task); err != nil {
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditTaskMessage(injectCtx, userID, &tg.MessagesEditMessageRequest{
 			ID:      msgID,
 			Message: i18n.T(i18nk.BotMsgTransferErrorAddTaskFailed, map[string]any{"Error": err}),
-		})
+		}, msgedit.Final)
 		return dispatcher.EndGroups
 	}
 
-	ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+	tgutil.EditTaskMessage(injectCtx, userID, &tg.MessagesEditMessageRequest{
 		ID: msgID,
 		Message: i18n.T(i18nk.BotMsgTransferInfoTaskAdded, map[string]any{
 			"Count":  len(elems),
 			"SizeMB": fmt.Sprintf("%.2f", float64(totalSize)/(1024*1024)),
 			"TaskID": taskID,
 		}),
-	})
+	}, msgedit.Queued)
 
 	return dispatcher.EndGroups
 }

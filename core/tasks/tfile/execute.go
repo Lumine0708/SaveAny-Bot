@@ -12,6 +12,7 @@ import (
 	"github.com/krau/SaveAny-Bot/common/tdler"
 	"github.com/krau/SaveAny-Bot/common/utils/fsutil"
 	"github.com/krau/SaveAny-Bot/common/utils/ioutil"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
 	"github.com/krau/SaveAny-Bot/pkg/enums/ctxkey"
 	"github.com/krau/SaveAny-Bot/pkg/storagetypes"
@@ -20,6 +21,8 @@ import (
 )
 
 func (t *Task) Execute(ctx context.Context) error {
+	tgutil.StartNotification(ctx)
+	defer tgutil.ForgetNotification(ctx)
 	logger := log.FromContext(ctx).WithPrefix(fmt.Sprintf("file[%s]", t.File.Name()))
 	if t.Progress != nil {
 		t.Progress.OnStart(ctx, t)

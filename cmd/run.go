@@ -65,6 +65,7 @@ func Run(cmd *cobra.Command, _ []string) {
 	logger.Info("Exiting...")
 	defer logger.Info("Exit complete")
 	core.Close()
+	bot.Close()
 	cleanCache()
 	if selfupdate.ShouldRestart() {
 		logger.Info("Restarting to run the updated version...")

@@ -7,10 +7,10 @@ import (
 	"github.com/celestix/gotgproto/dispatcher"
 	"github.com/celestix/gotgproto/ext"
 	"github.com/charmbracelet/log"
-	"github.com/gotd/td/tg"
 	"github.com/krau/SaveAny-Bot/client/bot/handlers/utils/msgelem"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/core"
 )
 
@@ -28,10 +28,9 @@ func handleCancelCallback(ctx *ext.Context, update *ext.Update) error {
 		return dispatcher.EndGroups
 	}
 
-	ctx.EditMessage(update.CallbackQuery.GetUserID(), &tg.MessagesEditMessageRequest{
-		ID:      update.CallbackQuery.GetMsgID(),
-		Message: i18n.T(i18nk.BotMsgCancelInfoCancellingTask, nil),
-	})
+	tgutil.CancelNotification(ctx, taskid,
+		i18n.T(i18nk.BotMsgCancelInfoCancellingTask, nil),
+		i18n.T(i18nk.BotMsgProgressTaskCanceledWithId, map[string]any{"TaskID": taskid}))
 
 	return dispatcher.EndGroups
 }
@@ -51,6 +50,9 @@ func handleCancelCmd(ctx *ext.Context, update *ext.Update) error {
 		})), nil)
 		return dispatcher.EndGroups
 	}
+	tgutil.CancelNotification(ctx, taskID,
+		i18n.T(i18nk.BotMsgCancelInfoCancellingTask, nil),
+		i18n.T(i18nk.BotMsgProgressTaskCanceledWithId, map[string]any{"TaskID": taskID}))
 	ctx.Reply(update, ext.ReplyTextString(i18n.T(i18nk.BotMsgCancelInfoCancelRequested, map[string]any{
 		"TaskID": taskID,
 	})), nil)

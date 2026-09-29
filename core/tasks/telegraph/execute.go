@@ -10,12 +10,15 @@ import (
 	"github.com/charmbracelet/log"
 	"github.com/duke-git/lancet/v2/retry"
 	"github.com/krau/SaveAny-Bot/common/utils/fsutil"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
 	"github.com/krau/SaveAny-Bot/pkg/taskevent"
 	"golang.org/x/sync/errgroup"
 )
 
 func (t *Task) Execute(ctx context.Context) error {
+	tgutil.StartNotification(ctx)
+	defer tgutil.ForgetNotification(ctx)
 	logger := log.FromContext(ctx)
 	logger.Infof("Starting Telegraph task %s", t.PhPath)
 	if t.progress != nil {

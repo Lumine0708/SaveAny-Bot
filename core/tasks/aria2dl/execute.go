@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
 	"github.com/krau/SaveAny-Bot/pkg/aria2"
 	"github.com/krau/SaveAny-Bot/pkg/enums/ctxkey"
@@ -18,6 +19,8 @@ import (
 
 // Execute implements core.Executable.
 func (t *Task) Execute(ctx context.Context) error {
+	tgutil.StartNotification(ctx)
+	defer tgutil.ForgetNotification(ctx)
 	logger := log.FromContext(ctx)
 	logger.Infof("Starting aria2 download task %s (GID: %s)", t.ID, t.GID)
 
