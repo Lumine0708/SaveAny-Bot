@@ -13,6 +13,7 @@ func cloneRequest(req *tg.MessagesEditMessageRequest) *tg.MessagesEditMessageReq
 	owned := copyTL(reflect.ValueOf(req)).Interface().(*tg.MessagesEditMessageRequest)
 	owned.SetFlags()
 	if owned.Flags.Has(2) && owned.ReplyMarkup == nil {
+		// Preserve an explicit clear until pending patches have been merged.
 		owned.ReplyMarkup = &tg.ReplyInlineMarkup{}
 	}
 	return owned

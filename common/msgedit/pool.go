@@ -251,6 +251,12 @@ func (p *Pool) worker() {
 		delete(p.pending, key)
 		p.active[key] = job
 		p.mu.Unlock()
+		// Keep explicit clears through pending merges, then omit empty keyboards
+		// on the wire to match Telegram's edit-message clearing representation.
+		if markup, ok := job.request.ReplyMarkup.(*tg.ReplyInlineMarkup); ok && len(markup.Rows) == 0 {
+			job.request.ReplyMarkup = nil
+			job.request.Flags.Unset(2)
+		}
 		err := p.send(p.ctx, key.ChatID, job.request)
 		if err != nil && !tgerr.Is(err, "MESSAGE_NOT_MODIFIED") {
 			taskID := ""

@@ -44,7 +44,7 @@ func TestCancelledTaskFinalUsesBotContextAndSealsLateUpdates(t *testing.T) {
 		t.Fatalf("final: %s %v", got, err)
 	}
 	got := awaitEdit(t, sent)
-	if got.Message != "cancelled" || len(got.ReplyMarkup.(*tg.ReplyInlineMarkup).Rows) != 0 || !got.Flags.Has(3) {
+	if got.Message != "cancelled" || got.ReplyMarkup != nil || got.Flags.Has(2) || !got.Flags.Has(3) {
 		t.Fatalf("final snapshot: %+v", got)
 	}
 	if req.ReplyMarkup != nil || req.Flags.Has(3) {

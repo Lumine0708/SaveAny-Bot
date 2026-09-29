@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -256,7 +258,7 @@ func TestPendingPatchesAndImmutableOwnership(t *testing.T) {
 	}
 	close(release)
 	cleared := receive(t, entered).req
-	if cleared.ID != 3 || !cleared.Flags.Has(11) || cleared.Message != "" || !cleared.Flags.Has(3) || len(cleared.Entities) != 0 || !cleared.Flags.Has(2) || len(cleared.ReplyMarkup.(*tg.ReplyInlineMarkup).Rows) != 0 {
+	if cleared.ID != 3 || !cleared.Flags.Has(11) || cleared.Message != "" || !cleared.Flags.Has(3) || len(cleared.Entities) != 0 || cleared.Flags.Has(2) || cleared.ReplyMarkup != nil {
 		t.Fatalf("explicit clear lost: %+v", cleared)
 	}
 	got := receive(t, entered).req
@@ -463,5 +465,98 @@ func TestConcurrentSubmissionsDoNotMutateSDKObjects(t *testing.T) {
 	case err := <-failures:
 		t.Fatal(err)
 	default:
+	}
+}
+
+func TestReplyMarkupClearWireEncoding(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		markup    tg.ReplyMarkupClass
+		explicit  bool
+		wantClear bool
+	}{
+		{"nil rows", &tg.ReplyInlineMarkup{}, true, true},
+		{"empty rows", &tg.ReplyInlineMarkup{Rows: []tg.KeyboardButtonRow{}}, true, true},
+		{"explicit nil", nil, true, true},
+		{"nonempty", &tg.ReplyInlineMarkup{Rows: []tg.KeyboardButtonRow{{Buttons: []tg.KeyboardButtonClass{&tg.KeyboardButtonCallback{Text: "cancel", Data: []byte("cancel")}}}}}, true, false},
+		{"omitted", nil, false, false},
+	} {
+		for _, pendingMerge := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/merge=%t", tt.name, pendingMerge), func(t *testing.T) {
+				type wireResult struct {
+					request tg.MessagesEditMessageRequest
+					err     error
+				}
+				entered := make(chan struct{}, 1)
+				release := make(chan struct{})
+				sent := make(chan wireResult, 1)
+				p := New(t.Context(), 1, 4, func(ctx context.Context, _ int64, req *tg.MessagesEditMessageRequest) error {
+					if req.ID == 1 {
+						entered <- struct{}{}
+						select {
+						case <-release:
+							return nil
+						case <-ctx.Done():
+							return ctx.Err()
+						}
+					}
+					var buffer bin.Buffer
+					result := wireResult{err: req.Encode(&buffer)}
+					if result.err == nil {
+						result.err = result.request.Decode(&buffer)
+					}
+					sent <- result
+					return result.err
+				})
+				t.Cleanup(func() { p.Close(time.Second) })
+				submit(t, p, 1, 1, "block", nil, Progress)
+				receive(t, entered)
+				oldMarkup := &tg.ReplyInlineMarkup{Rows: []tg.KeyboardButtonRow{{Buttons: []tg.KeyboardButtonClass{&tg.KeyboardButtonCallback{Text: "old", Data: []byte("old")}}}}}
+				if pendingMerge {
+					if _, err := p.Submit(1, &tg.MessagesEditMessageRequest{ID: 2, ReplyMarkup: oldMarkup}, nil, Progress); err != nil {
+						t.Fatal(err)
+					}
+				}
+				req := &tg.MessagesEditMessageRequest{ID: 2, Peer: &tg.InputPeerSelf{}, Message: "updated"}
+				if tt.explicit {
+					req.SetReplyMarkup(tt.markup)
+				}
+				original := copyTL(reflect.ValueOf(req)).Interface()
+				if _, err := p.Submit(1, req, nil, Progress); err != nil {
+					t.Fatal(err)
+				}
+				if pendingMerge {
+					if got := submit(t, p, 1, 2, "latest text", nil, Progress); got != Merged {
+						t.Fatalf("text patch = %s, want merged", got)
+					}
+				}
+				close(release)
+				result := receive(t, sent)
+				if result.err != nil {
+					t.Fatalf("TL encode/decode: %v", result.err)
+				}
+				got := &result.request
+				wantMarkup := tt.markup
+				if tt.wantClear {
+					wantMarkup = nil
+				} else if !tt.explicit && pendingMerge {
+					wantMarkup = oldMarkup
+				}
+				if got.Flags.Has(2) != (wantMarkup != nil) || !reflect.DeepEqual(got.ReplyMarkup, wantMarkup) {
+					t.Fatalf("wire reply markup: flag 2 = %t, markup = %#v; want %#v", got.Flags.Has(2), got.ReplyMarkup, wantMarkup)
+				}
+				wantText := "updated"
+				if pendingMerge {
+					wantText = "latest text"
+				}
+				if got.Message != wantText {
+					t.Fatalf("wire text = %q, want %q", got.Message, wantText)
+				}
+				waitIdle(t, p)
+				if !reflect.DeepEqual(req, original) {
+					t.Fatalf("caller request mutated: got %+v, want %+v", req, original)
+				}
+			})
+		}
 	}
 }
