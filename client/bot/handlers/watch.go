@@ -42,6 +42,9 @@ func handleWatchCmd(ctx *ext.Context, update *ext.Update) error {
 		ctx.Reply(update, ext.ReplyTextString(i18n.T(i18nk.BotMsgCommonErrorGetUserFailed)), nil)
 		return dispatcher.EndGroups
 	}
+	if args[1] == "notify" {
+		return handleWatchNotifyCmd(ctx, update, user, args[2:])
+	}
 	if user.DefaultStorage == "" {
 		ctx.Reply(update, ext.ReplyTextString(i18n.T(i18nk.BotMsgCommonErrorDefaultStorageNotSet)), nil)
 		return dispatcher.EndGroups
@@ -202,7 +205,7 @@ func (w *watchMediaGroupHandler) addFile(chatID int64, userID uint, file tfile.T
 	})
 }
 
-func listenMediaMessageEvent(ch chan userclient.MediaMessageEvent) {
+func listenMediaMessageEvent(ch chan userclient.MediaMessageEvent, botCtx *ext.Context) {
 	if userclient.GetCtx() == nil {
 		return
 	}
@@ -227,7 +230,7 @@ func listenMediaMessageEvent(ch chan userclient.MediaMessageEvent) {
 				filterType := filter[0]
 				filterData := filter[1]
 				switch filterType {
-				case "msgre": // [TODO] enums for filter types
+				case "msgre":
 					if ok, err := regexp.MatchString(filterData, msgText); err != nil {
 						continue
 					} else if !ok {
@@ -252,7 +255,6 @@ func listenMediaMessageEvent(ch chan userclient.MediaMessageEvent) {
 				logger.Errorf("Failed to get storage by user ID %d and name %s: %v", user.ChatID, user.DefaultStorage, err)
 				continue
 			}
-			// Resolve the default directory path from user.DefaultDir
 			var defaultDirPath string
 			if user.DefaultDir != 0 {
 				dir, err := database.GetDirByID(ctx, user.DefaultDir)
@@ -286,7 +288,6 @@ func listenMediaMessageEvent(ch chan userclient.MediaMessageEvent) {
 				file.SetName(sb.String())
 			}
 
-			// Check if this is a media group and if rules specify NEW-FOR-ALBUM
 			groupID, isGroup := file.Message().GetGroupedID()
 			needAlbumHandling := false
 			if isGroup && groupID != 0 && user.ApplyRule && user.Rules != nil {
@@ -297,12 +298,11 @@ func listenMediaMessageEvent(ch chan userclient.MediaMessageEvent) {
 			if needAlbumHandling {
 				// For media groups with NEW-FOR-ALBUM rule, collect all files of the same group
 				watchMediaGroupMgr.addFile(event.ChatID, user.ID, file, time.Duration(max(config.C().Telegram.MediaGroupTimeout, 1))*time.Second, func(files []tfile.TGFileMessage) {
-					processWatchMediaGroup(ctx, user, stor, defaultDirPath, files)
+					processWatchMediaGroup(ctx, botCtx, user, stor, defaultDirPath, files)
 				})
 				continue
 			}
 
-			// Process single file or media group without album folder creation
 			dirPath := defaultDirPath
 			if user.ApplyRule && user.Rules != nil {
 				matched, matchedStorageName, matchedDirPath := ruleutil.ApplyRule(ctx, user.Rules, ruleutil.NewInput(file))
@@ -322,12 +322,14 @@ func listenMediaMessageEvent(ch chan userclient.MediaMessageEvent) {
 			storagePath := path.Join(dirPath, file.Name())
 			injectCtx := tgutil.ExtWithContext(ctx.Context, ctx)
 			taskid := xid.New().String()
-			task, err := coretfile.NewTGFileTask(taskid, injectCtx, file, stor, storagePath, nil)
+			task, err := coretfile.NewTGFileTask(taskid, injectCtx, file, stor, storagePath, newWatchNotifyProgress(ctx, botCtx, user))
 			if err != nil {
 				logger.Errorf("create task failed: %s", err)
 				continue
 			}
+			injectCtx = tgutil.TaskNotification(tgutil.WithNotificationBot(injectCtx, botCtx), task.TaskID())
 			if err := core.AddTask(injectCtx, task); err != nil {
+				tgutil.ForgetNotification(injectCtx)
 				logger.Errorf("add task failed: %s", err)
 				continue
 			}
@@ -336,7 +338,7 @@ func listenMediaMessageEvent(ch chan userclient.MediaMessageEvent) {
 	}
 }
 
-func processWatchMediaGroup(ctx *ext.Context, user *database.User, stor storage.Storage, dirPath string, files []tfile.TGFileMessage) {
+func processWatchMediaGroup(ctx *ext.Context, botCtx *ext.Context, user *database.User, stor storage.Storage, dirPath string, files []tfile.TGFileMessage) {
 	logger := log.FromContext(ctx)
 	if len(files) == 0 {
 		return
@@ -366,7 +368,6 @@ func processWatchMediaGroup(ctx *ext.Context, user *database.User, stor storage.
 	}
 	albumFiles := make(map[int64][]albumFile)
 
-	// Collect files by group ID
 	for _, file := range files {
 		storName, ruleDirPath := applyRule(file)
 		fileStor := stor
@@ -402,7 +403,6 @@ func processWatchMediaGroup(ctx *ext.Context, user *database.User, stor storage.
 		})
 	}
 
-	// Process album files with folder creation
 	injectCtx := tgutil.ExtWithContext(ctx.Context, ctx)
 	totalTasks := 0
 	for groupID, afiles := range albumFiles {
@@ -419,12 +419,14 @@ func processWatchMediaGroup(ctx *ext.Context, user *database.User, stor storage.
 		for _, af := range afiles {
 			afstorPath := path.Join(af.dirPath, albumDir, af.file.Name())
 			taskid := xid.New().String()
-			task, err := coretfile.NewTGFileTask(taskid, injectCtx, af.file, albumStor, afstorPath, nil)
+			task, err := coretfile.NewTGFileTask(taskid, injectCtx, af.file, albumStor, afstorPath, newWatchNotifyProgress(ctx, botCtx, user))
 			if err != nil {
 				logger.Errorf("create task failed for album file: %s", err)
 				continue
 			}
+			injectCtx = tgutil.TaskNotification(tgutil.WithNotificationBot(injectCtx, botCtx), task.TaskID())
 			if err := core.AddTask(injectCtx, task); err != nil {
+				tgutil.ForgetNotification(injectCtx)
 				logger.Errorf("add task failed: %s", err)
 				continue
 			}

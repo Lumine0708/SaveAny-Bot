@@ -15,6 +15,7 @@ import (
 	"github.com/krau/SaveAny-Bot/common/tdler"
 	"github.com/krau/SaveAny-Bot/common/utils/fsutil"
 	"github.com/krau/SaveAny-Bot/common/utils/ioutil"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
 	"github.com/krau/SaveAny-Bot/pkg/enums/ctxkey"
 	"github.com/krau/SaveAny-Bot/pkg/storagetypes"
@@ -33,6 +34,8 @@ func (g executionGroup) usesBatchSaver() bool {
 }
 
 func (t *Task) Execute(ctx context.Context) error {
+	tgutil.StartNotification(ctx)
+	defer tgutil.ForgetNotification(ctx)
 	logger := log.FromContext(ctx).WithPrefix(fmt.Sprintf("batch_file[%s]", t.ID))
 	logger.Info("Starting batch file task")
 	if t.Progress != nil {
@@ -76,7 +79,6 @@ func (t *Task) Execute(ctx context.Context) error {
 	return err
 }
 
-// notifyProgress reports a progress update to the optional tracker.
 func (t *Task) notifyProgress(ctx context.Context) {
 	if t.Progress != nil {
 		t.Progress.OnProgress(ctx, t)
@@ -174,7 +176,6 @@ func (t *Task) processBatch(ctx context.Context, group executionGroup) error {
 		return err
 	}
 
-	// Upload only successfully downloaded elements.
 	successElems := make([]*TaskElement, 0, len(group.elems))
 	for _, r := range results {
 		if r.err == nil {

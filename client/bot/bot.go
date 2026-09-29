@@ -13,12 +13,22 @@ import (
 	"github.com/krau/SaveAny-Bot/client/bot/handlers"
 	"github.com/krau/SaveAny-Bot/client/middleware"
 	"github.com/krau/SaveAny-Bot/common/i18n"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
 	"github.com/krau/SaveAny-Bot/database"
 )
 
 var ectx *ext.Context
+var editPool *msgedit.Pool
+
+func Close() {
+	if editPool != nil {
+		if !editPool.Close(3 * time.Second) {
+			log.FromContext(ectx).Warn("Message edit shutdown timed out")
+		}
+	}
+}
 
 func ExtContext() *ext.Context {
 	return ectx
@@ -26,6 +36,12 @@ func ExtContext() *ext.Context {
 
 func Init(ctx context.Context) <-chan struct{} {
 	log.FromContext(ctx).Info("Initializing Bot...")
+	editPool = msgedit.New(ctx, 2, 1024, func(runCtx context.Context, chat int64, req *tg.MessagesEditMessageRequest) error {
+		workerCtx := ext.NewContext(runCtx, ectx.Raw, ectx.PeerStorage, ectx.Self, ectx.Sender, nil, true)
+		_, err := workerCtx.EditMessage(chat, req)
+		return err
+	})
+	ctx = tgutil.WithEditor(ctx, editPool)
 	resultChan := make(chan struct {
 		client *gotgproto.Client
 		err    error
@@ -48,7 +64,7 @@ func Init(ctx context.Context) <-chan struct{} {
 			&gotgproto.ClientOpts{
 				Session:          sessionMaker.SqlSession(database.GetDialect(config.C().DB.Session)),
 				DisableCopyright: true,
-				Middlewares:      middleware.NewDefaultMiddlewares(ctx, 5*time.Minute),
+				Middlewares:      middleware.NewBotMiddlewares(ctx, 5*time.Minute),
 				Resolver:         resolver,
 				Context:          ctx,
 				MaxRetries:       config.C().Telegram.RpcRetry,
@@ -91,8 +107,8 @@ func Init(ctx context.Context) <-chan struct{} {
 		if result.err != nil {
 			log.FromContext(ctx).Fatalf("Failed to initialize Bot: %s", result.err)
 		}
-		handlers.Register(result.client.Dispatcher)
 		ectx = result.client.CreateContext()
+		handlers.Register(result.client.Dispatcher, ectx)
 		log.FromContext(ctx).Info("Bot initialization completed.")
 	}
 	return shouldRestart

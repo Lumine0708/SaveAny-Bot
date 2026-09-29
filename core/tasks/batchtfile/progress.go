@@ -14,6 +14,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/dlutil"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
@@ -114,8 +115,12 @@ func (p *Progress) editMessage(ctx context.Context, taskID string, message rende
 		return
 	}
 	req := buildBatchEditMessageRequest(p.MessageID, taskID, message, cancellable)
+	phase := msgedit.Progress
+	if !cancellable {
+		phase = msgedit.Final
+	}
 	if ext := tgutil.ExtFromContext(ctx); ext != nil {
-		if _, err := ext.EditMessage(p.ChatID, req); err != nil {
+		if _, err := tgutil.EditTaskMessage(ctx, p.ChatID, req, phase); err != nil {
 			log.FromContext(ctx).Errorf("Failed to edit batch progress message: %v", err)
 		}
 	}

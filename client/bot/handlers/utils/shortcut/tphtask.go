@@ -8,6 +8,7 @@ import (
 	"github.com/krau/SaveAny-Bot/client/bot/handlers/utils/msgelem"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/common/utils/tphutil"
 	"github.com/krau/SaveAny-Bot/core"
@@ -36,21 +37,22 @@ func CreateAndAddtelegraphWithEdit(
 		tphutil.DefaultClient(),
 		tphtask.NewProgress(trackMsgID, userID),
 	)
+	injectCtx = tgutil.TaskNotification(injectCtx, task.TaskID(), msgedit.Key{ChatID: userID, MessageID: trackMsgID})
 	if err := core.AddTask(injectCtx, task); err != nil {
 		log.FromContext(ctx).Errorf("Failed to add task: %s", err)
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditTaskMessage(injectCtx, userID, &tg.MessagesEditMessageRequest{
 			ID: trackMsgID,
 			Message: i18n.T(i18nk.BotMsgCommonErrorTaskAddFailed, map[string]any{
 				"Error": err.Error(),
 			}),
-		})
+		}, msgedit.Final)
 		return dispatcher.EndGroups
 	}
 	text, entities := msgelem.BuildTaskAddedEntities(ctx, tphpage.Title, core.GetLength(ctx))
-	ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+	tgutil.EditTaskMessage(injectCtx, userID, &tg.MessagesEditMessageRequest{
 		ID:       trackMsgID,
 		Message:  text,
 		Entities: entities,
-	})
+	}, msgedit.Queued)
 	return dispatcher.EndGroups
 }

@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/log"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	ytdlp "github.com/lrstanley/go-ytdlp"
 
 	"github.com/krau/SaveAny-Bot/config"
@@ -17,6 +19,8 @@ import (
 
 // Execute implements core.Executable.
 func (t *Task) Execute(ctx context.Context) error {
+	tgutil.StartNotification(ctx)
+	defer tgutil.ForgetNotification(ctx)
 	logger := log.FromContext(ctx)
 	logger.Infof("Starting yt-dlp download task %s", t.ID)
 
@@ -24,7 +28,6 @@ func (t *Task) Execute(ctx context.Context) error {
 		t.Progress.OnStart(ctx, t)
 	}
 
-	// Create temporary directory for downloads
 	tempDir, err := os.MkdirTemp(config.C().Temp.BasePath, "ytdlp-*")
 	if err != nil {
 		logger.Errorf("Failed to create temp directory: %v", err)
@@ -33,11 +36,19 @@ func (t *Task) Execute(ctx context.Context) error {
 		}
 		return fmt.Errorf("failed to create temp directory: %w", err)
 	}
-	defer os.RemoveAll(tempDir) // Clean up temp directory
+	defer os.RemoveAll(tempDir)
+
+	// Absolute: yt-dlp ignores --paths for absolute output templates.
+	if tempDir, err = filepath.Abs(tempDir); err != nil {
+		logger.Errorf("Failed to resolve temp directory: %v", err)
+		if t.Progress != nil {
+			t.Progress.OnDone(ctx, t, err)
+		}
+		return fmt.Errorf("failed to resolve temp directory: %w", err)
+	}
 
 	logger.Debugf("Created temp directory: %s", tempDir)
 
-	// Download files using yt-dlp
 	downloadedFiles, err := t.downloadFiles(ctx, tempDir)
 	if err != nil {
 		logger.Errorf("yt-dlp download failed: %v", err)
@@ -56,10 +67,9 @@ func (t *Task) Execute(ctx context.Context) error {
 		return err
 	}
 
-	// Transfer downloaded files to storage
 	logger.Infof("Transferring %d file(s) to storage %s", len(downloadedFiles), t.Storage.Name())
-	for _, filePath := range downloadedFiles {
-		if err := t.transferFile(ctx, filePath); err != nil {
+	for _, relPath := range downloadedFiles {
+		if err := t.transferFile(ctx, tempDir, relPath); err != nil {
 			logger.Errorf("File transfer failed: %v", err)
 			if t.Progress != nil {
 				t.Progress.OnDone(ctx, t, err)
@@ -76,38 +86,53 @@ func (t *Task) Execute(ctx context.Context) error {
 	return nil
 }
 
-// downloadFiles downloads files using yt-dlp and returns the list of downloaded file paths
+// buildDownloadCommand prepares the yt-dlp command and the custom flags for a
+// task. The bot owns the output directory: the configured template roots every
+// output in tempDir, and custom -o/--output templates are re-rooted there.
+func buildDownloadCommand(cfg config.YtdlpConfig, tempDir string, flags []string) (*ytdlp.Command, []string, error) {
+	flags, err := rewriteOutputTemplates(flags, tempDir)
+	if err != nil {
+		return nil, nil, err
+	}
+	// The base template keeps outputs the user did not template themselves (e.g.
+	// the video when only a "subtitle:" template is given) inside tempDir.
+	base, err := outputTemplatePath(tempDir, resolveFilenameTemplate(cfg))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	cmd := ytdlp.New().Output(base)
+	if cfg.RestrictFilenames {
+		cmd = cmd.RestrictFilenames()
+	}
+
+	// Format/quality defaults only apply when the user passes no custom flags.
+	if len(flags) == 0 {
+		cmd = applyFormatConfig(cmd, cfg)
+	}
+	return cmd, flags, nil
+}
+
 func (t *Task) downloadFiles(ctx context.Context, tempDir string) ([]string, error) {
 	logger := log.FromContext(ctx)
 
-	// Configure yt-dlp command with essential settings
-	// Always set output path to ensure files go to temp directory
-	cmd := ytdlp.New().
-		Output(filepath.Join(tempDir, "%(title)s.%(ext)s"))
-
-	// Apply config-based format/quality defaults only when the user passes no
-	// custom flags. Any user flag means they take full control of yt-dlp.
-	if len(t.Flags) == 0 {
-		cmd = applyFormatConfig(cmd, config.C().Ytdlp)
+	cmd, flags, err := buildDownloadCommand(config.C().Ytdlp, tempDir, t.Flags)
+	if err != nil {
+		return nil, err
 	}
-	// Note: If custom flags are provided, users have full control over format/quality
-	// The output path is always set above to ensure downloads go to the correct directory
 
 	if t.Progress != nil {
 		t.Progress.OnProgress(ctx, t, "Downloading...")
 	}
 
-	// Execute download with URLs and custom flags
-	logger.Infof("Executing yt-dlp for %d URL(s) with %d custom flag(s)", len(t.URLs), len(t.Flags))
+	logger.Infof("Executing yt-dlp for %d URL(s) with %d custom flag(s)", len(t.URLs), len(flags))
 
-	// Combine flags and URLs as arguments (flags first, then URLs)
 	// yt-dlp accepts: yt-dlp [OPTIONS] URL [URL...]
-	args := append(t.Flags, t.URLs...)
+	args := append(flags, t.URLs...)
 
 	// Run with context for cancellation support
 	result, err := cmd.Run(ctx, args...)
 	if err != nil {
-		// Check if context was canceled
 		if errors.Is(err, context.Canceled) {
 			return nil, err
 		}
@@ -118,30 +143,46 @@ func (t *Task) downloadFiles(ctx context.Context, tempDir string) ([]string, err
 		return nil, fmt.Errorf("yt-dlp exited with code %d: %s", result.ExitCode, result.Stderr)
 	}
 
-	// List downloaded files
-	files, err := os.ReadDir(tempDir)
+	files, err := collectDownloadedFiles(tempDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read temp directory: %w", err)
+		return nil, err
 	}
-
-	var downloadedFiles []string
 	for _, file := range files {
-		if file.IsDir() {
-			continue
-		}
-		fullPath := filepath.Join(tempDir, file.Name())
-		downloadedFiles = append(downloadedFiles, fullPath)
-		logger.Debugf("Downloaded file: %s", file.Name())
+		logger.Debugf("Downloaded file: %s", filepath.Base(file))
 	}
 
-	return downloadedFiles, nil
+	return files, nil
 }
 
-// transferFile transfers a single file to storage
-func (t *Task) transferFile(ctx context.Context, filePath string) error {
-	logger := log.FromContext(ctx)
+// collectDownloadedFiles walks dir recursively, since output templates may create
+// subdirectories, and returns the files relative to dir.
+func collectDownloadedFiles(dir string) ([]string, error) {
+	var files []string
+	if err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		files = append(files, rel)
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("failed to read temp directory: %w", err)
+	}
+	return files, nil
+}
 
-	// Check if file exists
+// transferFile transfers the file at relPath below tempDir to storage, keeping
+// the directories an output template created.
+func (t *Task) transferFile(ctx context.Context, tempDir, relPath string) error {
+	logger := log.FromContext(ctx)
+	filePath := filepath.Join(tempDir, relPath)
+
 	fileInfo, err := os.Stat(filePath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -151,7 +192,6 @@ func (t *Task) transferFile(ctx context.Context, filePath string) error {
 		return fmt.Errorf("failed to stat file %s: %w", filePath, err)
 	}
 
-	// Open file
 	f, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("failed to open file %s: %w", filePath, err)
@@ -161,31 +201,24 @@ func (t *Task) transferFile(ctx context.Context, filePath string) error {
 	// Set content length in context for storage
 	ctx = context.WithValue(ctx, ctxkey.ContentLength, fileInfo.Size())
 
-	// Save to storage
-	fileName := filepath.Base(filePath)
-	// Remove special characters from filename if needed
-	fileName = sanitizeFilename(fileName)
-	destPath := filepath.Join(t.StorPath, fileName)
+	destPath := filepath.Join(t.StorPath, sanitizeFilename(relPath))
 
-	logger.Infof("Transferring file %s to %s:%s", fileName, t.Storage.Name(), destPath)
+	logger.Infof("Transferring file %s to %s:%s", relPath, t.Storage.Name(), destPath)
 
 	if err := t.Storage.Save(ctx, f, destPath); err != nil {
-		return fmt.Errorf("failed to save file %s to storage: %w", fileName, err)
+		return fmt.Errorf("failed to save file %s to storage: %w", relPath, err)
 	}
 
-	logger.Infof("Successfully transferred file %s", fileName)
+	logger.Infof("Successfully transferred file %s", relPath)
 
 	if t.Progress != nil {
-		t.Progress.OnProgress(ctx, t, fmt.Sprintf("Transferred: %s", fileName))
+		t.Progress.OnProgress(ctx, t, fmt.Sprintf("Transferred: %s", relPath))
 	}
 
 	return nil
 }
 
-// sanitizeFilename removes or replaces problematic characters in filenames
 func sanitizeFilename(name string) string {
-	// yt-dlp with --restrict-filenames should already handle most cases
-	// but we can do additional sanitization if needed
 	name = strings.ReplaceAll(name, ":", "_")
 	name = strings.ReplaceAll(name, "\"", "'")
 	return name

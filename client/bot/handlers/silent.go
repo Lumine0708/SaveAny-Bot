@@ -11,6 +11,7 @@ import (
 	"github.com/krau/SaveAny-Bot/common/cache"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/database"
 	"github.com/krau/SaveAny-Bot/pkg/tcbdata"
 	"github.com/krau/SaveAny-Bot/storage"
@@ -81,7 +82,6 @@ func handleSetDefaultCallback(ctx *ext.Context, update *ext.Update) error {
 	}
 	var dir *database.Dir
 	if data.DirID != 0 {
-		// 已经选择了文件夹
 		var err error
 		dir, err = database.GetDirByID(ctx, data.DirID)
 		if err != nil {
@@ -89,7 +89,6 @@ func handleSetDefaultCallback(ctx *ext.Context, update *ext.Update) error {
 		}
 		user.DefaultDir = dir.ID
 	} else {
-		// 检查是否有可用的文件夹
 		dirs, err := database.GetDirsByUserIDAndStorageName(ctx, user.ID, storageName)
 		if err != nil {
 			return failedAnswer(i18n.T(i18nk.BotMsgCommonErrorGetDirFailed, map[string]any{
@@ -97,14 +96,13 @@ func handleSetDefaultCallback(ctx *ext.Context, update *ext.Update) error {
 			}))
 		}
 		if len(dirs) > 0 {
-			// 要求选择文件夹
 			markup, err := msgelem.BuildSetDefaultDirMarkup(ctx, storageName, dirs)
 			if err != nil {
 				return failedAnswer(i18n.T(i18nk.BotMsgCommonErrorBuildDirSelectKeyboardFailed, map[string]any{
 					"Error": err.Error(),
 				}))
 			}
-			ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+			tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 				ID:          update.CallbackQuery.GetMsgID(),
 				Message:     i18n.T(i18nk.BotMsgCommonPromptSelectDefaultDir, nil),
 				ReplyMarkup: markup,
@@ -127,7 +125,7 @@ func handleSetDefaultCallback(ctx *ext.Context, update *ext.Update) error {
 			"Dir":  strings.TrimPrefix(dir.Path, "/"),
 		})
 	}
-	ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 		ID:      update.CallbackQuery.GetMsgID(),
 		Message: msg,
 	})

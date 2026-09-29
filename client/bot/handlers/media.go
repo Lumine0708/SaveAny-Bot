@@ -10,6 +10,7 @@ import (
 	"github.com/krau/SaveAny-Bot/client/bot/handlers/utils/shortcut"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/database"
 	"github.com/krau/SaveAny-Bot/storage"
 )
@@ -42,7 +43,7 @@ func handleMediaMessage(ctx *ext.Context, update *ext.Update) error {
 		})), nil)
 		return dispatcher.EndGroups
 	}
-	ctx.EditMessage(update.EffectiveChat().GetID(), req)
+	tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), req)
 	return dispatcher.EndGroups
 }
 

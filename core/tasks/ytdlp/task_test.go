@@ -9,15 +9,19 @@ import (
 	storenum "github.com/krau/SaveAny-Bot/pkg/enums/storage"
 )
 
-// MockStorage is a simple mock for testing
-type MockStorage struct{}
+type MockStorage struct {
+	saved []string
+}
 
-func (m *MockStorage) Init(ctx context.Context, cfg storcfg.StorageConfig) error     { return nil }
-func (m *MockStorage) Type() storenum.StorageType                                    { return "mock" }
-func (m *MockStorage) Name() string                                                  { return "test-storage" }
-func (m *MockStorage) JoinStoragePath(p string) string                               { return "test-path" }
-func (m *MockStorage) Save(ctx context.Context, reader io.Reader, path string) error { return nil }
-func (m *MockStorage) Exists(ctx context.Context, path string) bool                  { return false }
+func (m *MockStorage) Init(ctx context.Context, cfg storcfg.StorageConfig) error { return nil }
+func (m *MockStorage) Type() storenum.StorageType                                { return "mock" }
+func (m *MockStorage) Name() string                                              { return "test-storage" }
+func (m *MockStorage) JoinStoragePath(p string) string                           { return "test-path" }
+func (m *MockStorage) Save(ctx context.Context, reader io.Reader, path string) error {
+	m.saved = append(m.saved, path)
+	return nil
+}
+func (m *MockStorage) Exists(ctx context.Context, path string) bool { return false }
 
 func TestNewTask(t *testing.T) {
 	ctx := context.Background()
@@ -52,7 +56,7 @@ func TestNewTask(t *testing.T) {
 func TestNewTaskWithoutFlags(t *testing.T) {
 	ctx := context.Background()
 	urls := []string{"https://example.com/video1", "https://example.com/video2"}
-	var flags []string // No flags
+	var flags []string
 	stor := &MockStorage{}
 	storPath := "test-path"
 
@@ -75,14 +79,12 @@ func TestTaskTitle(t *testing.T) {
 	ctx := context.Background()
 	stor := &MockStorage{}
 
-	// Test with single URL
 	task1 := NewTask("id1", ctx, []string{"https://example.com/video"}, nil, stor, "path", nil)
 	title1 := task1.Title()
 	if title1 == "" {
 		t.Error("Task title should not be empty")
 	}
 
-	// Test with multiple URLs
 	task2 := NewTask("id2", ctx, []string{"https://example.com/v1", "https://example.com/v2"}, nil, stor, "path", nil)
 	title2 := task2.Title()
 	if title2 == "" {

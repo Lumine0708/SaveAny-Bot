@@ -29,6 +29,7 @@ SaveAny-Bot 是 Go 编写的 Telegram 文件保存机器人，支持单文件、
 | --- | --- |
 | [AGENTS_BRANCHING.md](AGENTS_BRANCHING.md) | 修改文件、提交、推送、发 PR、切换任务方向或清理 worktree 前 |
 | [AGENTS_DEV.md](AGENTS_DEV.md) | 构建、测试、代码生成、安装工具或本机起服务前 |
+| [AGENTS_TEST_ENV.md](AGENTS_TEST_ENV.md) | 使用 ubuntu209、重建测试环境、Telegram 真实联调、A/B 验证或清理测试产物前 |
 | [AGENTS_BACKEND.md](AGENTS_BACKEND.md) | 修改 Go 业务、配置、HTTP API、存储接口、插件或 i18n 前 |
 | [AGENTS_DATABASE.md](AGENTS_DATABASE.md) | 修改 SQLite 模型、查询、用户同步、迁移或数据修复前 |
 | [AGENTS_TASKS.md](AGENTS_TASKS.md) | 修改客户端生命周期、排队、取消、下载/保存、并发或进度反馈前 |

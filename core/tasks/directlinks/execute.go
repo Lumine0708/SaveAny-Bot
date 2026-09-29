@@ -13,6 +13,7 @@ import (
 	"github.com/duke-git/lancet/v2/retry"
 	"github.com/krau/SaveAny-Bot/common/utils/fsutil"
 	"github.com/krau/SaveAny-Bot/common/utils/ioutil"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
 	"github.com/krau/SaveAny-Bot/pkg/enums/ctxkey"
 	"github.com/krau/SaveAny-Bot/pkg/taskevent"
@@ -20,12 +21,13 @@ import (
 )
 
 func (t *Task) Execute(ctx context.Context) error {
+	tgutil.StartNotification(ctx)
+	defer tgutil.ForgetNotification(ctx)
 	logger := log.FromContext(ctx)
 	logger.Infof("Starting directlinks task %s", t.ID)
 	if t.Progress != nil {
 		t.Progress.OnStart(ctx, t)
 	}
-	// head all links to get file info
 	eg, gctx := errgroup.WithContext(ctx)
 	eg.SetLimit(config.C().Workers)
 	fetchedTotalBytes := atomic.Int64{}
@@ -51,7 +53,6 @@ func (t *Task) Execute(ctx context.Context) error {
 					file.Name = filename
 				}
 			}
-			// extract filename from URL if Content-Disposition is empty or invalid
 			if file.Name == "" {
 				file.Name = parseFilenameFromURL(file.URL)
 			}
@@ -71,7 +72,6 @@ func (t *Task) Execute(ctx context.Context) error {
 		return err
 	}
 	t.totalBytes = fetchedTotalBytes.Load()
-	// start downloading
 	eg, gctx = errgroup.WithContext(ctx)
 	eg.SetLimit(config.C().Workers)
 	for _, file := range t.files {

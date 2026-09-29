@@ -13,6 +13,7 @@ import (
 	"github.com/krau/SaveAny-Bot/client/bot/handlers/utils/shortcut"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
 	"github.com/krau/SaveAny-Bot/database"
 	"github.com/krau/SaveAny-Bot/pkg/tcbdata"
@@ -130,7 +131,7 @@ func processMediaGroup(ctx *ext.Context, update *ext.Update, key mediaGroupKey) 
 	})
 	if err != nil {
 		logger.Errorf("Failed to build storage selection keyboard: %s", err)
-		ctx.EditMessage(userId, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userId, &tg.MessagesEditMessageRequest{
 			ID: msg.ID,
 			Message: i18n.T(i18nk.BotMsgMediaGroupErrorBuildStorageSelectKeyboardFailed, map[string]any{
 				"Error": err.Error(),
@@ -138,7 +139,7 @@ func processMediaGroup(ctx *ext.Context, update *ext.Update, key mediaGroupKey) 
 		})
 		return
 	}
-	ctx.EditMessage(userId, &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, userId, &tg.MessagesEditMessageRequest{
 		ID: msg.ID,
 		Message: i18n.T(i18nk.BotMsgMediaGroupInfoGroupFoundFilesSelectStorage, map[string]any{
 			"Count": len(items),

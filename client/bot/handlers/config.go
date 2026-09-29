@@ -11,6 +11,7 @@ import (
 	"github.com/krau/SaveAny-Bot/client/bot/handlers/utils/conflictutil"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
 	"github.com/krau/SaveAny-Bot/database"
 	"github.com/krau/SaveAny-Bot/pkg/enums/fnamest"
@@ -80,7 +81,7 @@ func handleConfigFnameSTCallback(ctx *ext.Context, update *ext.Update) error {
 		if err := database.UpdateUser(ctx, user); err != nil {
 			return err
 		}
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 			ID: update.CallbackQuery.GetMsgID(),
 			Message: i18n.T(i18nk.BotMsgConfigInfoFilenameStrategySet, map[string]any{
 				"Strategy": fnamest.GetDisplay(st, config.C().Lang),
@@ -107,7 +108,7 @@ func handleConfigFnameSTCallback(ctx *ext.Context, update *ext.Update) error {
 	if err != nil {
 		currentSt = fnamest.Default
 	}
-	ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 		ID: update.CallbackQuery.GetMsgID(),
 		Message: i18n.T(i18nk.BotMsgConfigPromptSelectFilenameStrategy, map[string]any{
 			"Strategy": fnamest.GetDisplay(currentSt, config.C().Lang),
@@ -133,7 +134,7 @@ func handleConfigConflictSTCallback(ctx *ext.Context, update *ext.Update) error 
 		if err := database.UpdateUser(ctx, user); err != nil {
 			return err
 		}
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 			ID: update.CallbackQuery.GetMsgID(),
 			Message: i18n.T(i18nk.BotMsgConfigInfoConflictStrategySet, map[string]any{
 				"Strategy": conflictutil.Display(selected),
@@ -156,7 +157,7 @@ func handleConfigConflictSTCallback(ctx *ext.Context, update *ext.Update) error 
 	}
 	markup := &tg.ReplyInlineMarkup{Rows: rows}
 	currentSt := conflictutil.EffectiveStrategy(user)
-	ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 		ID: update.CallbackQuery.GetMsgID(),
 		Message: i18n.T(i18nk.BotMsgConfigPromptSelectConflictStrategy, map[string]any{
 			"Strategy": conflictutil.Display(currentSt),
