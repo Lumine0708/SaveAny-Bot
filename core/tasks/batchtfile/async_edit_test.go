@@ -12,15 +12,18 @@ import (
 
 	"github.com/celestix/gotgproto/ext"
 	"github.com/gotd/td/tg"
+	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/ioutil"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	storconfig "github.com/krau/SaveAny-Bot/config/storage"
+	"github.com/krau/SaveAny-Bot/pkg/tfile"
 	"github.com/krau/SaveAny-Bot/storage/local"
 )
 
 func TestBlockedMessageEditDoesNotBlockBatchLocalCopyCallbacks(t *testing.T) {
-	useProgressRegressionLocale(t)
+	i18n.Init("zh-Hans")
+	t.Cleanup(func() { i18n.Init("zh-Hans") })
 	entered := make(chan struct{}, 1)
 	release := make(chan struct{})
 	pool := msgedit.New(t.Context(), 1, 8, func(ctx context.Context, _ int64, _ *tg.MessagesEditMessageRequest) error {
@@ -40,7 +43,11 @@ func TestBlockedMessageEditDoesNotBlockBatchLocalCopyCallbacks(t *testing.T) {
 	ctx := tgutil.TaskNotification(tgutil.ExtWithContext(botCtx.Context, botCtx), "copy-task", msgedit.Key{ChatID: 1, MessageID: 2})
 	progress := NewProgressTracker(2, 1)
 	const size = 128 * 1024
-	task := newProgressRegressionTask(progress, progressRegressionFile{"first", size}, progressRegressionFile{"second", size})
+	elems := []TaskElement{
+		{ID: "first", File: tfile.NewTGFile(nil, nil, size, "first.bin")},
+		{ID: "second", File: tfile.NewTGFile(nil, nil, size, "second.bin")},
+	}
+	task := NewBatchTGFileTask("copy-task", ctx, elems, progress, true)
 	for _, id := range []string{"first", "second"} {
 		task.markItemActive(id, false, time.Now())
 		task.recordDownloadComplete(id, size)
