@@ -14,6 +14,7 @@ import (
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
 	"github.com/krau/SaveAny-Bot/common/selfupdate"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
 	"github.com/unvgo/ghselfupdate"
 )
@@ -107,7 +108,7 @@ func handleUpdateCallback(ctx *ext.Context, u *ext.Update) error {
 		})))
 		return dispatcher.EndGroups
 	}
-	ctx.EditMessage(u.GetUserChat().GetID(), &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, u.GetUserChat().GetID(), &tg.MessagesEditMessageRequest{
 		ID: u.CallbackQuery.GetMsgID(),
 		Message: i18n.T(i18nk.BotMsgUpdateInfoUpgradingWithVersion, map[string]any{
 			"Current": config.Version,
@@ -115,7 +116,7 @@ func handleUpdateCallback(ctx *ext.Context, u *ext.Update) error {
 	})
 	latest, err := selfupdate.Update(currentV)
 	if err != nil {
-		ctx.EditMessage(u.GetUserChat().GetID(), &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, u.GetUserChat().GetID(), &tg.MessagesEditMessageRequest{
 			ID: u.CallbackQuery.GetMsgID(),
 			Message: i18n.T(i18nk.BotMsgUpdateErrorUpgradeFailed, map[string]any{
 				"Error": err.Error(),
@@ -123,7 +124,7 @@ func handleUpdateCallback(ctx *ext.Context, u *ext.Update) error {
 		})
 		return dispatcher.EndGroups
 	}
-	ctx.EditMessage(u.GetUserChat().GetID(), &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, u.GetUserChat().GetID(), &tg.MessagesEditMessageRequest{
 		ID: u.CallbackQuery.GetMsgID(),
 		Message: i18n.T(i18nk.BotMsgUpdateInfoUpgradeSuccess, map[string]any{
 			"Version": latest.Version.String(),

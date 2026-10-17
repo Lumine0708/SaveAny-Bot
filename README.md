@@ -17,6 +17,8 @@
 
 </div>
 
+> **Changes in this branch:** Bot message edits are handled through a shared asynchronous queue, covering interaction messages and task status notifications. Rate limiting, merging of pending updates, and discarding of stale progress updates are handled centrally, preventing Telegram message-edit rate-limit waits from blocking downloads, file saving, and command handling.
+
 ## 🎯 Features
 
 - Support documents / videos / photos / stickers… and even [Telegraph](https://telegra.ph/)

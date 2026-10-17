@@ -87,7 +87,7 @@ func handleTextMessage(ctx *ext.Context, u *ext.Update) error {
 		})), nil)
 		return dispatcher.EndGroups
 	}
-	ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 		Message:     text,
 		ReplyMarkup: markup,
 		Entities:    entities,

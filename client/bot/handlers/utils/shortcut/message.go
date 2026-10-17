@@ -69,7 +69,7 @@ func GetFilesFromUpdateLinkMessageWithReplyEdit(ctx *ext.Context, update *ext.Up
 		return nil, nil, nil, dispatcher.EndGroups
 	}
 	editReplied = func(text string, markup tg.ReplyMarkupClass) {
-		if _, err := ctx.EditMessage(update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
+		if _, err := tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
 			ID:          replied.ID,
 			Message:     text,
 			ReplyMarkup: markup,

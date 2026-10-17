@@ -14,6 +14,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/dlutil"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/pkg/aria2"
@@ -65,7 +66,7 @@ func (p *Progress) OnStart(ctx context.Context, task *Task) {
 			},
 		}},
 	)
-	ext.EditMessage(p.chatID, req)
+	tgutil.EditTaskMessage(ctx, p.chatID, req, msgedit.Progress)
 }
 
 // OnProgress implements ProgressTracker.
@@ -120,7 +121,7 @@ func (p *Progress) OnProgress(ctx context.Context, task *Task, status *aria2.Sta
 	)
 	ext := tgutil.ExtFromContext(ctx)
 	if ext != nil {
-		ext.EditMessage(p.chatID, req)
+		tgutil.EditTaskMessage(ctx, p.chatID, req, msgedit.Progress)
 	}
 }
 
@@ -132,23 +133,23 @@ func (p *Progress) OnDone(ctx context.Context, task *Task, err error) {
 			logger.Infof("Aria2 task %s was canceled", task.TaskID())
 			ext := tgutil.ExtFromContext(ctx)
 			if ext != nil {
-				ext.EditMessage(p.chatID, &tg.MessagesEditMessageRequest{
+				tgutil.EditTaskMessage(ctx, p.chatID, &tg.MessagesEditMessageRequest{
 					ID: p.msgID,
 					Message: i18n.T(i18nk.BotMsgProgressTaskCanceledWithId, map[string]any{
 						"TaskID": task.TaskID(),
 					}),
-				})
+				}, msgedit.Final)
 			}
 		} else {
 			logger.Errorf("Aria2 task %s failed: %s", task.TaskID(), err)
 			ext := tgutil.ExtFromContext(ctx)
 			if ext != nil {
-				ext.EditMessage(p.chatID, &tg.MessagesEditMessageRequest{
+				tgutil.EditTaskMessage(ctx, p.chatID, &tg.MessagesEditMessageRequest{
 					ID: p.msgID,
 					Message: i18n.T(i18nk.BotMsgProgressTaskFailedWithError, map[string]any{
 						"Error": err.Error(),
 					}),
-				})
+				}, msgedit.Final)
 			}
 		}
 		return
@@ -175,7 +176,7 @@ func (p *Progress) OnDone(ctx context.Context, task *Task, err error) {
 
 	ext := tgutil.ExtFromContext(ctx)
 	if ext != nil {
-		ext.EditMessage(p.chatID, req)
+		tgutil.EditTaskMessage(ctx, p.chatID, req, msgedit.Final)
 	}
 }
 

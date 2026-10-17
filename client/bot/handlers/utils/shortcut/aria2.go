@@ -7,6 +7,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/core"
 	"github.com/krau/SaveAny-Bot/core/tasks/aria2dl"
@@ -24,7 +25,7 @@ func CreateAndAddAria2TaskWithEdit(ctx *ext.Context, stor storage.Storage, dirPa
 
 	if len(uris) == 0 {
 		logger.Error("URIs list is empty")
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 			ID:      msgID,
 			Message: i18n.T(i18nk.BotMsgDlErrorNoValidLinks, nil),
 		})
@@ -34,7 +35,7 @@ func CreateAndAddAria2TaskWithEdit(ctx *ext.Context, stor storage.Storage, dirPa
 	gid, err := aria2Client.AddURI(ctx, uris, nil)
 	if err != nil {
 		logger.Errorf("Failed to add aria2 download: %s", err)
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 			ID: msgID,
 			Message: i18n.T(i18nk.BotMsgAria2ErrorAddingAria2Download, map[string]any{
 				"Error": err.Error(),
@@ -45,19 +46,20 @@ func CreateAndAddAria2TaskWithEdit(ctx *ext.Context, stor storage.Storage, dirPa
 	logger.Infof("Aria2 download added with GID: %s", gid)
 
 	task := aria2dl.NewTask(xid.New().String(), injectCtx, gid, uris, aria2Client, stor, dirPath, aria2dl.NewProgress(msgID, userID))
+	injectCtx = tgutil.TaskNotification(injectCtx, task.TaskID(), msgedit.Key{ChatID: userID, MessageID: msgID})
 	if err := core.AddTask(injectCtx, task); err != nil {
 		logger.Errorf("Failed to add task: %s", err)
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditTaskMessage(injectCtx, userID, &tg.MessagesEditMessageRequest{
 			ID: msgID,
 			Message: i18n.T(i18nk.BotMsgCommonErrorTaskAddFailed, map[string]any{
 				"Error": err.Error(),
 			}),
-		})
+		}, msgedit.Final)
 		return dispatcher.EndGroups
 	}
-	ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+	tgutil.EditTaskMessage(injectCtx, userID, &tg.MessagesEditMessageRequest{
 		ID:      msgID,
 		Message: i18n.T(i18nk.BotMsgCommonInfoTaskAdded, nil),
-	})
+	}, msgedit.Queued)
 	return dispatcher.EndGroups
 }

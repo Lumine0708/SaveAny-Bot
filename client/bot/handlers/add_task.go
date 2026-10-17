@@ -15,6 +15,7 @@ import (
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
 	"github.com/krau/SaveAny-Bot/common/utils/fsutil"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/database"
 	"github.com/krau/SaveAny-Bot/pkg/enums/tasktype"
 	"github.com/krau/SaveAny-Bot/pkg/tcbdata"
@@ -58,7 +59,7 @@ func handleAddCallback(ctx *ext.Context, update *ext.Update) error {
 			})))
 			return dispatcher.EndGroups
 		}
-		ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 			ID:          update.CallbackQuery.GetMsgID(),
 			Message:     i18n.T(i18nk.BotMsgCommonPromptSelectDir, nil),
 			ReplyMarkup: markup,

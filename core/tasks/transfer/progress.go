@@ -13,6 +13,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/dlutil"
 	"github.com/krau/SaveAny-Bot/common/utils/progressutil"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
@@ -76,7 +77,7 @@ func (p *Progress) OnStart(ctx context.Context, info TaskInfo) {
 
 	ext := tgutil.ExtFromContext(ctx)
 	if ext != nil {
-		_, err := ext.EditMessage(p.ChatID, req)
+		_, err := tgutil.EditTaskMessage(ctx, p.ChatID, req, msgedit.Progress)
 		if err != nil {
 			log.FromContext(ctx).Errorf("Failed to send progress start message: %s", err)
 		}
@@ -155,7 +156,7 @@ func (p *Progress) OnProgress(ctx context.Context, info TaskInfo) {
 
 	ext := tgutil.ExtFromContext(ctx)
 	if ext != nil {
-		ext.EditMessage(p.ChatID, req)
+		tgutil.EditTaskMessage(ctx, p.ChatID, req, msgedit.Progress)
 	}
 }
 
@@ -218,7 +219,7 @@ func (p *Progress) OnDone(ctx context.Context, info TaskInfo, err error) {
 
 	ext := tgutil.ExtFromContext(ctx)
 	if ext != nil {
-		ext.EditMessage(p.ChatID, req)
+		tgutil.EditTaskMessage(ctx, p.ChatID, req, msgedit.Final)
 	}
 }
 

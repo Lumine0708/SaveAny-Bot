@@ -11,6 +11,7 @@ import (
 	"github.com/krau/SaveAny-Bot/common/cache"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/database"
 	"github.com/krau/SaveAny-Bot/pkg/tcbdata"
 	"github.com/krau/SaveAny-Bot/storage"
@@ -101,7 +102,7 @@ func handleSetDefaultCallback(ctx *ext.Context, update *ext.Update) error {
 					"Error": err.Error(),
 				}))
 			}
-			ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+			tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 				ID:          update.CallbackQuery.GetMsgID(),
 				Message:     i18n.T(i18nk.BotMsgCommonPromptSelectDefaultDir, nil),
 				ReplyMarkup: markup,
@@ -124,7 +125,7 @@ func handleSetDefaultCallback(ctx *ext.Context, update *ext.Update) error {
 			"Dir":  strings.TrimPrefix(dir.Path, "/"),
 		})
 	}
-	ctx.EditMessage(userID, &tg.MessagesEditMessageRequest{
+	tgutil.EditMessage(ctx, userID, &tg.MessagesEditMessageRequest{
 		ID:      update.CallbackQuery.GetMsgID(),
 		Message: msg,
 	})

@@ -6,11 +6,13 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/celestix/gotgproto/ext"
 	"github.com/gotd/td/tg"
 
 	"github.com/krau/SaveAny-Bot/common/i18n"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	tftask "github.com/krau/SaveAny-Bot/core/tasks/tfile"
 	"github.com/krau/SaveAny-Bot/database"
@@ -216,4 +218,57 @@ func TestWatchNotifyMarkupEscapesFileName(t *testing.T) {
 	if bold != 1 || code != 1 {
 		t.Fatalf("entity counts = bold:%d code:%d, want bold:1 code:1", bold, code)
 	}
+}
+
+func TestWatchNotificationWaitsForCreatedMessageBeforeEditing(t *testing.T) {
+	i18n.Init("zh-Hans")
+	sent := make(chan int, 2)
+	pool := msgedit.New(t.Context(), 1, 4, func(_ context.Context, _ int64, req *tg.MessagesEditMessageRequest) error {
+		sent <- req.ID
+		return nil
+	})
+	t.Cleanup(func() { pool.Close(time.Second) })
+	botCtx := &ext.Context{Context: tgutil.WithEditor(t.Context(), pool)}
+	ctx := tgutil.TaskNotification(tgutil.ExtWithContext(botCtx.Context, botCtx), "notify-task")
+	opened, release := make(chan struct{}), make(chan struct{})
+	original := openWatchNotification
+	openWatchNotification = func(context.Context, *ext.Context, int64, string) tftask.ProgressTracker {
+		close(opened)
+		<-release
+		return tftask.NewProgressTrack(42, 1)
+	}
+	t.Cleanup(func() { openWatchNotification = original })
+	tracker := newWatchNotifyProgress(ctx, botCtx, &database.User{WatchNotify: true, ChatID: 1})
+	done := make(chan struct{})
+	go func() { tracker.OnStart(ctx, notifyTestInfo{}); close(done) }()
+	select {
+	case <-opened:
+	case <-time.After(time.Second):
+		t.Fatal("first message not opened")
+	}
+	select {
+	case <-done:
+		t.Error("first message creation became asynchronous")
+	default:
+	}
+	select {
+	case id := <-sent:
+		t.Errorf("edit submitted before message ID exists: %d", id)
+	default:
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("tracker did not resume after message creation")
+	}
+	select {
+	case id := <-sent:
+		if id != 42 {
+			t.Fatalf("edit uses message %d", id)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("created message was not edited")
+	}
+	tracker.OnDone(ctx, notifyTestInfo{}, nil)
 }

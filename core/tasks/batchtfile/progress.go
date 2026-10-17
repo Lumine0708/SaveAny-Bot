@@ -14,6 +14,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/dlutil"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 	"github.com/krau/SaveAny-Bot/config"
@@ -33,7 +34,6 @@ type Progress struct {
 	lastText     string
 	done         bool
 	skippedFiles []string
-	edits        *tgutil.ProgressEditQueue
 }
 
 type renderedBatchMessage struct {
@@ -90,7 +90,7 @@ func (p *Progress) render(ctx context.Context, info TaskInfo, priority bool) {
 	}
 	p.lastText = message.Text
 	p.lastUpdateAt = now
-	p.submit(ctx, buildBatchEditMessageRequest(p.MessageID, info.TaskID(), message, true), false)
+	p.editMessage(ctx, info.TaskID(), message, true)
 }
 
 func (p *Progress) OnDone(ctx context.Context, info TaskInfo, err error) {
@@ -106,14 +106,24 @@ func (p *Progress) OnDone(ctx context.Context, info TaskInfo, err error) {
 		return
 	}
 	p.lastText = message.Text
-	p.submit(ctx, buildBatchEditMessageRequest(p.MessageID, info.TaskID(), message, false), true)
+	p.editMessage(ctx, info.TaskID(), message, false)
 }
 
-func (p *Progress) submit(ctx context.Context, req *tg.MessagesEditMessageRequest, final bool) {
-	if p.edits == nil {
-		p.edits = tgutil.NewProgressEditQueue(tgutil.SendProgressEdit)
+func (p *Progress) editMessage(ctx context.Context, taskID string, message renderedBatchMessage, cancellable bool) {
+	if message.Err != nil {
+		log.FromContext(ctx).Errorf("Failed to render batch progress message: %v", message.Err)
+		return
 	}
-	p.edits.Submit(ctx, p.ChatID, req, final)
+	req := buildBatchEditMessageRequest(p.MessageID, taskID, message, cancellable)
+	phase := msgedit.Progress
+	if !cancellable {
+		phase = msgedit.Final
+	}
+	if ext := tgutil.ExtFromContext(ctx); ext != nil {
+		if _, err := tgutil.EditTaskMessage(ctx, p.ChatID, req, phase); err != nil {
+			log.FromContext(ctx).Errorf("Failed to edit batch progress message: %v", err)
+		}
+	}
 }
 
 func buildBatchEditMessageRequest(messageID int, taskID string, message renderedBatchMessage, cancellable bool) *tg.MessagesEditMessageRequest {

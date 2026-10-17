@@ -11,6 +11,7 @@ import (
 	"github.com/gotd/td/tg"
 	"github.com/krau/SaveAny-Bot/common/i18n"
 	"github.com/krau/SaveAny-Bot/common/i18n/i18nk"
+	"github.com/krau/SaveAny-Bot/common/msgedit"
 	"github.com/krau/SaveAny-Bot/common/utils/progressutil"
 	"github.com/krau/SaveAny-Bot/common/utils/tgutil"
 )
@@ -55,7 +56,7 @@ func (p *Progress) OnStart(ctx context.Context, info TaskInfo) {
 	)
 	ext := tgutil.ExtFromContext(ctx)
 	if ext != nil {
-		ext.EditMessage(p.ChatID, req)
+		tgutil.EditTaskMessage(ctx, p.ChatID, req, msgedit.Progress)
 		return
 	}
 }
@@ -91,7 +92,7 @@ func (p *Progress) OnProgress(ctx context.Context, info TaskInfo) {
 	)
 	ext := tgutil.ExtFromContext(ctx)
 	if ext != nil {
-		ext.EditMessage(p.ChatID, req)
+		tgutil.EditTaskMessage(ctx, p.ChatID, req, msgedit.Progress)
 		return
 	}
 }
@@ -103,23 +104,23 @@ func (p *Progress) OnDone(ctx context.Context, info TaskInfo, err error) {
 			logger.Infof("Telegraph task %s was canceled", info.TaskID())
 			ext := tgutil.ExtFromContext(ctx)
 			if ext != nil {
-				ext.EditMessage(p.ChatID, &tg.MessagesEditMessageRequest{
+				tgutil.EditTaskMessage(ctx, p.ChatID, &tg.MessagesEditMessageRequest{
 					ID: p.MessageID,
 					Message: i18n.T(i18nk.BotMsgProgressTaskCanceledWithId, map[string]any{
 						"TaskID": info.TaskID(),
 					}),
-				})
+				}, msgedit.Final)
 			}
 		} else {
 			logger.Errorf("Telegraph task %s failed: %s", info.TaskID(), err)
 			ext := tgutil.ExtFromContext(ctx)
 			if ext != nil {
-				ext.EditMessage(p.ChatID, &tg.MessagesEditMessageRequest{
+				tgutil.EditTaskMessage(ctx, p.ChatID, &tg.MessagesEditMessageRequest{
 					ID: p.MessageID,
 					Message: i18n.T(i18nk.BotMsgProgressTaskFailedWithError, map[string]any{
 						"Error": err.Error(),
 					}),
-				})
+				}, msgedit.Final)
 			}
 		}
 		return
@@ -145,7 +146,7 @@ func (p *Progress) OnDone(ctx context.Context, info TaskInfo, err error) {
 
 	ext := tgutil.ExtFromContext(ctx)
 	if ext != nil {
-		ext.EditMessage(p.ChatID, req)
+		tgutil.EditTaskMessage(ctx, p.ChatID, req, msgedit.Final)
 	}
 }
 

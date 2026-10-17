@@ -56,7 +56,7 @@ func handleSaveCmd(ctx *ext.Context, update *ext.Update) error {
 		ctx.Reply(update, ext.ReplyTextString(i18n.T(i18nk.BotMsgCommonErrorBuildStorageSelectMessageFailed, map[string]any{"Error": err.Error()})), nil)
 		return dispatcher.EndGroups
 	}
-	ctx.EditMessage(update.EffectiveChat().GetID(), req)
+	tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), req)
 	return dispatcher.EndGroups
 }
 
@@ -175,13 +175,13 @@ func handleBatchSave(ctx *ext.Context, update *ext.Update, args []string) error 
 		})
 		if err != nil {
 			log.FromContext(ctx).Errorf("Failed to build storage selection keyboard: %s", err)
-			ctx.EditMessage(update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
+			tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
 				ID:      replied.ID,
 				Message: i18n.T(i18nk.BotMsgCommonErrorBuildStorageSelectKeyboardFailed, map[string]any{"Error": err.Error()}),
 			})
 			return dispatcher.EndGroups
 		}
-		ctx.EditMessage(update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
+		tgutil.EditMessage(ctx, update.EffectiveChat().GetID(), &tg.MessagesEditMessageRequest{
 			ID:          replied.ID,
 			Message:     i18n.T(i18nk.BotMsgCommonInfoFoundFilesSelectStorage, map[string]any{"Count": len(files)}),
 			ReplyMarkup: markup,
